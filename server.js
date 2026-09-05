@@ -1,46 +1,37 @@
 // server.js
-// Simple per-origin WebSocket chat with history, security, and rate limiting
+// Global WebSocket chat server with history + rate limiting
 
 const WebSocket = require("ws");
 
-// IMPORTANT: works locally AND on Railway
+// Works locally AND on Railway
 const PORT = process.env.PORT || 8080;
 
-// Only these origins can use your chat.
-// You can add more HTTPS sites here.
-const ALLOWED_ORIGINS = [
-  "https://www.youtube.com",
-  "https://www.google.com",
-  "https://console-chat-server-production.up.railway.app"
-];
+// One global room for everyone
+const ROOM_NAME = "global";
 
-const MAX_HISTORY = 50;           // messages per room
-const MAX_MSG_PER_WINDOW = 10;    // messages
+const MAX_HISTORY = 50;           // messages stored
+const MAX_MSG_PER_WINDOW = 10;    // messages allowed
 const RATE_WINDOW_MS = 10_000;    // 10 seconds
-const SHARED_TOKEN = null;        // set to a string if you want a shared secret
 
-// Create WebSocket server
 const wss = new WebSocket.Server({ port: PORT });
 
-const rooms = new Map(); // roomName -> { clients: Set<socket>, history: [] }
+wss.on("error", error => {
+  console.error("WebSocket server error:", error.message);
+});
 
-function getRoom(roomName) {
-  if (!rooms.has(roomName)) {
-    rooms.set(roomName, { clients: new Set(), history: [] });
-  }
-  return rooms.get(roomName);
-}
+const room = {
+  clients: new Set(),
+  history: []
+};
 
-function addToHistory(roomName, msg) {
-  const room = getRoom(roomName);
+function addToHistory(msg) {
   room.history.push(msg);
   if (room.history.length > MAX_HISTORY) {
     room.history.shift();
   }
 }
 
-function broadcastToRoom(roomName, payload, exceptSocket = null) {
-  const room = getRoom(roomName);
+function broadcast(payload, exceptSocket = null) {
   for (const client of room.clients) {
     if (client.readyState !== WebSocket.OPEN) continue;
     if (client === exceptSocket) continue;
@@ -51,49 +42,23 @@ function broadcastToRoom(roomName, payload, exceptSocket = null) {
 wss.on("connection", (socket, req) => {
   const origin = req.headers.origin || "unknown";
 
-  // Security: only allow certain origins
-  if (!ALLOWED_ORIGINS.includes(origin)) {
-    console.log("Blocked origin:", origin);
-    socket.close(4001, "Origin not allowed");
-    return;
-  }
-
-  // Optional token auth via query ?token=...
-  if (SHARED_TOKEN) {
-    try {
-      const url = new URL(req.url, origin);
-      const token = url.searchParams.get("token");
-      if (token !== SHARED_TOKEN) {
-        console.log("Bad token from", origin);
-        socket.close(4002, "Invalid token");
-        return;
-      }
-    } catch (e) {
-      socket.close(4003, "Bad URL");
-      return;
-    }
-  }
-
-  const roomName = origin; // one room per website origin
-  const room = getRoom(roomName);
+  console.log("Client connected from", origin);
   room.clients.add(socket);
 
-  console.log("Client connected from", origin);
-
-  // simple rate limiting
+  // rate limiting
   socket._msgTimes = [];
 
-  // send history on connect
+  // send history
   socket.send(JSON.stringify({
     type: "history",
-    room: roomName,
+    room: ROOM_NAME,
     messages: room.history
   }));
 
   socket.on("message", raw => {
     let text = raw.toString().slice(0, 500); // limit length
 
-    // rate limiting
+    // rate limit check
     const now = Date.now();
     socket._msgTimes = socket._msgTimes.filter(t => now - t < RATE_WINDOW_MS);
     if (socket._msgTimes.length >= MAX_MSG_PER_WINDOW) {
@@ -107,20 +72,24 @@ wss.on("connection", (socket, req) => {
 
     const msg = {
       type: "chat",
-      room: roomName,
+      room: ROOM_NAME,
       from: origin,
       text,
       time: now
     };
 
-    addToHistory(roomName, msg);
-    broadcastToRoom(roomName, msg, socket);
+    addToHistory(msg);
+    broadcast(msg, socket);
   });
 
   socket.on("close", () => {
     room.clients.delete(socket);
     console.log("Client disconnected from", origin);
   });
+
+  socket.on("error", error => {
+    console.error(`WebSocket client error from ${origin}:`, error.message);
+  });
 });
 
-console.log(`Console chat server running on ws://0.0.0.0:${PORT}`);
+console.log(`Global chat server running on ws://0.0.0.0:${PORT}`);
