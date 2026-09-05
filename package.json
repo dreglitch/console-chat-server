@@ -1,11 +1,12 @@
 {
-  "name": "console-chat",
+  "name": "console-chat-server",
   "version": "1.0.0",
+  "description": "Per-origin WebSocket console chat server",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "ws": "^8.21.3"
+    "ws": "^8.17.0"
   }
 }
