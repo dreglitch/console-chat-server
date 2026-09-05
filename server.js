@@ -3,16 +3,15 @@
 
 const WebSocket = require("ws");
 
-// CONFIG
-// Use dynamic PORT for future hosting, default 8080 locally
+// IMPORTANT: works locally AND on Railway
 const PORT = process.env.PORT || 8080;
 
 // Only these origins can use your chat.
-// For local testing, you can temporarily allow "null" or "http://localhost",
-// but for real sites you’ll put actual HTTPS origins here.
+// You can add more HTTPS sites here.
 const ALLOWED_ORIGINS = [
   "https://www.youtube.com",
-  "https://www.google.com"
+  "https://www.google.com",
+  "https://console-chat-server-production.up.railway.app"
 ];
 
 const MAX_HISTORY = 50;           // messages per room
@@ -124,4 +123,4 @@ wss.on("connection", (socket, req) => {
   });
 });
 
-console.log(`Console chat server running on ws://localhost:${PORT}`);
+console.log(`Console chat server running on ws://0.0.0.0:${PORT}`);
