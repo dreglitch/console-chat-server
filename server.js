@@ -4,7 +4,8 @@
 const WebSocket = require("ws");
 
 // CONFIG
-const PORT = 8080;
+// Use dynamic PORT for future hosting, default 8080 locally
+const PORT = process.env.PORT || 8080;
 
 // Only these origins can use your chat.
 // For local testing, you can temporarily allow "null" or "http://localhost",
